@@ -29,12 +29,17 @@ See `example.py` for an example.
 First, subclass the `GetConfPapers` class
 
 ```python
-from get_conf_papers import GetConfPapers
+from get_conf_papers import GetConfPapers, Paper
 
 class GetCvprPapers(GetConfPapers):
 ```
 
 And then implement the `handle_paper_list` method
+
+```python
+    def handle_paper_list(self, soup) -> List[Paper]:
+        ...
+```
 
 Optionally, implement the `handle_paper_detail` method, if papers in the paper list links to a detail page
 
