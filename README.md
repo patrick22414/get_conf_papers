@@ -4,7 +4,7 @@
 
 `get_conf_papers` is a _very immature_ library that provides the boilerplate for scraping conference paper lists.
 
-# Install
+## Install
 
 Python >= 3.7 is required, for `dataclasses` and `asyncio.run()`.
 
@@ -20,7 +20,9 @@ Package `lxml` is recommanded for faster html parsing.
 conda install lxml
 ```
 
-# Usage
+And then just put/copy/download `get_conf_papers.py` onto your import path
+
+## Usage
 
 See `example.py` for an example.
 
