@@ -1,9 +1,11 @@
 import asyncio
 import csv
 import dataclasses
-import pickle
-from typing import List, Dict
 import os
+import pickle
+from os import path
+from typing import Dict, List
+
 import aiohttp
 from bs4 import BeautifulSoup, FeatureNotFound
 
@@ -19,14 +21,15 @@ except FeatureNotFound:
 
 @dataclasses.dataclass
 class Paper:
-    title: str
+    _id: int = None
 
+    title: str = ""
     authors: List[str] = dataclasses.field(default_factory=list)
     keywords: List[str] = dataclasses.field(default_factory=list)
 
     pdf: str = ""
     code: str = ""
-    supps: List[str] = ""
+    supps: List[str] = dataclasses.field(default_factory=list)
 
     detail_url: str = ""
 
@@ -36,8 +39,6 @@ class Paper:
     arxiv: str = ""
     semsch: str = ""
     bibtex: str = ""
-
-    _id: int = None
 
 
 class GetConfPapers:
@@ -55,13 +56,13 @@ class GetConfPapers:
         self.topic = topic
         self.sources = sources
 
-        if not os.path.isdir("tsv"):
+        if not path.isdir("tsv"):
             os.mkdir("tsv")
         self.tsv_filename = f"tsv/{self.name}-{self.topic}.tsv"
 
         self.save_htmls = save_htmls
         if self.save_htmls:
-            if not os.path.isdir("html"):
+            if not path.isdir("html"):
                 os.mkdir("html")
 
         self.webpage_cache = webpage_cache
@@ -70,7 +71,7 @@ class GetConfPapers:
         self._cache = None
 
     def __enter__(self):
-        if not self.clear_cache and os.path.isfile(self.webpage_cache):
+        if not self.clear_cache and path.isfile(self.webpage_cache):
             with open(self.webpage_cache, "rb") as f:
                 self._cache = pickle.load(f)
         else:
@@ -96,16 +97,14 @@ class GetConfPapers:
 
         print(f"Fetching {len(urls)} pages, {len(urls_to_fetch)} not in cache")
         webpages = asyncio.run(_fetch_all(urls_to_fetch))
-        count_fetched = 0
+        count_ok = 0
         for url, webpage in zip(urls_to_fetch, webpages):
             if isinstance(webpage, str):
-                count_fetched += 1
+                count_ok += 1
                 self._cache[url] = webpage
             else:
                 print("Failed", url)
-        print(
-            f"Fetched {len(urls_to_fetch)} pages, {count_fetched}/{len(urls_to_fetch)} OK"
-        )
+        print(f"Fetched {len(urls_to_fetch)} pages, {count_ok} OK")
 
         # Make soups from fetched webpages and local files
         soups: Dict[str, BeautifulSoup] = {}
@@ -119,24 +118,47 @@ class GetConfPapers:
         print(f"Created {len(soups)} soups")
 
         if self.save_htmls:
-            for name, soup in soups.items():
-                with open(
-                    os.path.join("html", os.path.basename(name)) + ".html", "w"
-                ) as fo:
+            for src, soup in soups.items():
+                with open(path.join("html", path.basename(src)) + ".html", "w") as fo:
                     fo.write(soup.prettify())
 
-        # pass to handle paper list
-        pass
+        # Pass to handle_paper_list
+        all_papers = []
+        try:
+            for src, soup in soups.items():
+                all_papers.extend(self.handle_paper_list(soup))
+        except Exception as e:
+            print(f"Error in handle_paper_list: {e}")
+            raise e
 
-    def handle_paper_list(soup: BeautifulSoup) -> List[Paper]:
+        print(f"Parsed a total of {len(all_papers)} papers")
+
+        # Fetch detail URLs not in cache
+        detail_urls = [p.detail_url for p in all_papers if p.detail_url]
+        detail_urls_to_fetch = [u for u in detail_urls if u not in self._cache]
+
+        print(
+            f"Fetching {len(detail_urls)} detail pages, {len(detail_urls_to_fetch)} not in cache"
+        )
+        webpages = asyncio.run(_fetch_all(detail_urls_to_fetch))
+        count_ok = 0
+        for url, webpage in zip(detail_urls_to_fetch, webpages):
+            if isinstance(webpage, str):
+                count_ok += 1
+                self._cache[url] = webpage
+            else:
+                print("Failed", url)
+        print(f"Fetched {len(detail_urls_to_fetch)} pages, {count_ok} OK")
+
+    def handle_paper_list(self, soup: BeautifulSoup) -> List[Paper]:
         raise NotImplementedError
 
-    def handle_paper_unit(html: str):
+    def handle_paper_detail(self, soup: BeautifulSoup, paper: Paper) -> Paper:
         raise NotImplementedError
 
-    @classmethod
-    def filter_papers(cls, all_papers):
-        raise NotImplementedError
+    # @classmethod
+    # def filter_papers(cls, all_papers):
+    #     raise NotImplementedError
 
 
 async def _fetch(session, url):
@@ -159,15 +181,4 @@ async def _fetch_all(urls):
 
 
 if __name__ == "__main__":
-    with GetConfPapers(
-        "cvpr2020",
-        "adv",
-        [
-            "https://openaccess.thecvf.com/CVPR2020.py?day=2020-06-16",
-            "https://openaccess.thecvf.com/CVPR2020.py?day=2020-06-17",
-            "https://openaccess.thecvf.com/CVPR2020.py?day=2020-06-18",
-        ],
-        save_htmls=True,
-        # clear_cache=True,
-    ) as get_cvpr_papers:
-        get_cvpr_papers()
+    pass
